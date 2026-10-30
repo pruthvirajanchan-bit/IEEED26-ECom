@@ -64,3 +64,28 @@ def test_configured_decline_token(seeded, monkeypatch):
         assert checkout(seeded, "payment-1", "decline").status_code == 200
     finally:
         get_settings.cache_clear()
+def test_retry_with_empty_cart(seeded):
+    add_item(seeded)
+    first = checkout(seeded, " Retry-Empty ")
+    assert first.status_code == 200
+    assert seeded.get("/cart/alex").json()["items"] == []
+
+    retry = checkout(seeded, "RETRY-EMPTY")
+    assert retry.status_code == 200
+    assert retry.json() == first.json()
+    assert seeded.get("/products/1").json()["inventory"] == 19
+    assert len(seeded.get("/orders").json()) == 1
+
+
+def test_different_keys_create_separate_orders(seeded):
+    add_item(seeded)
+    first = checkout(seeded, "purchase-1")
+    assert first.status_code == 200
+
+    add_item(seeded)
+    second = checkout(seeded, "purchase-2")
+    assert second.status_code == 200
+
+    assert first.json()["id"] != second.json()["id"]
+    assert len(seeded.get("/orders").json()) == 2
+    assert seeded.get("/products/1").json()["inventory"] == 18
